@@ -28,7 +28,8 @@ fn get_args() -> (String, Vec<String>) {
 }
 
 fn child_process(cmd: &str) {
-	make_jail();
+	let jid = make_jail();
+	println!("{}", jid);
 	let output = Command::new(cmd)
 	  .output()
 	  .expect("コマンドの実行に失敗");
@@ -41,7 +42,7 @@ fn child_process(cmd: &str) {
 	}
 }
 
-fn make_jail() {
+fn make_jail() -> i32 {
 	let keys_and_values = vec![
 		(CString::new("path").unwrap(), CString::new("/").unwrap().into_bytes_with_nul()),
 		(CString::new("vnet").unwrap(), 1u32.to_ne_bytes().to_vec()),
@@ -73,8 +74,8 @@ fn make_jail() {
 	// 結果の確認
 	if result < 0 {
 		eprintln!("jail_set failed: {}", std::io::Error::last_os_error());
-	} else {
-		println!("Jail created successfully. jid: {}", result);
+		std::process::exit(1);
 	}
+	result
 }
 
