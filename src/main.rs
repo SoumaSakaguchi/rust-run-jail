@@ -1,18 +1,25 @@
 use std::env;
 use std::ffi::CString;
 use std::process::Command;
+use std::sync::mpsc;
 use std::thread;
 use libc::{self, iovec};
 
 fn main() {
 	let (cmd, options) = get_args();
+
+	let (sender, receiver) = mpsc::channel();
 	let handle = thread::spawn(move || {
-		child_process(&cmd);
+		child_process(&cmd, sender);
 	});
+
 	println!("Options: {:?}", options);
+	let jid = receiver.recv().expect("Jail IDの受信に失敗");
+	println!("jid: {}", jid);
 
 	handle.join().expect("スレッドの実行に失敗");
-	
+	kill_jail(jid);
+
 	println!("Succsess!")
 }
 
@@ -27,9 +34,11 @@ fn get_args() -> (String, Vec<String>) {
 	(cmd, options)
 }
 
-fn child_process(cmd: &str) {
+fn child_process(cmd: &str, sender: mpsc::Sender<i32>) {
 	let jid = make_jail();
 	println!("{}", jid);
+	sender.send(jid).expect("Jail IDの送信に失敗");
+
 	let output = Command::new(cmd)
 	  .output()
 	  .expect("コマンドの実行に失敗");
@@ -79,3 +88,6 @@ fn make_jail() -> i32 {
 	result
 }
 
+fn kill_jail(jid: i32) {
+	let _result = unsafe { libc::jail_remove(jid) };
+}
