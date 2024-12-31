@@ -1,46 +1,57 @@
+use clap::Parser;
 use libc::{self, iovec};
-use std::env;
 use std::ffi::CString;
 use std::process::Command;
 use std::sync::mpsc;
 use std::thread;
 
+#[derive(Parser)]
+#[clap(
+    name    = "rust-run-jail",
+    author  = "SoumaSakaguchi",
+    version = "v0.1.0",
+    about   = "Rust製FreeBSD Jailランタイム"
+)]
+
+struct AppArg {
+    #[clap(value_parser, required = true)]
+    command: Vec<String>,
+}
+
 fn main() {
-    let (cmd, options) = get_args();
+    let arg: AppArg = AppArg::parse();
+    let (cmd, cmd_args) = parse_cmd_and_args(arg.command);
 
     let (sender, receiver) = mpsc::channel();
     let handle = thread::spawn({
         let cmd = cmd.clone();
-        let options = options.clone();
+        let cmd_args = cmd_args.clone();
         move || {
-            child_process(cmd, options, sender);
+            child_process(cmd, cmd_args, sender);
         }
     });
 
-    println!("Options: {:?}", options);
     let jid = receiver.recv().expect("Jail IDの受信に失敗");
     println!("jid: {}", jid);
 
     handle.join().expect("スレッドの実行に失敗");
-    kill_jail(jid);
+    jailremove_syscall(jid);
 
     println!("Succsess!")
 }
 
-fn get_args() -> (String, Vec<String>) {
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        eprintln!("Usage: {} <command> [options...]", args[0]);
+fn parse_cmd_and_args(command: Vec<String>) -> (String, Vec<String>) {
+    if command.is_empty() {
+        eprintln!("コマンドが指定されていません");
         std::process::exit(1);
     }
-    let cmd = args[1].clone();
-    let options = args[2..].to_vec();
-    (cmd, options)
+    let cmd = command[0].clone();
+    let cmd_args = command[1..].to_vec();
+    (cmd, cmd_args)
 }
 
 fn child_process(cmd: String, options: Vec<String>, sender: mpsc::Sender<i32>) {
-    let jid = make_jail();
-    println!("Created jail with ID: {}", jid);
+    let jid = jailset_syscall();
     sender.send(jid).expect("Jail IDの送信に失敗");
 
     let mut command = Command::new(cmd);
@@ -58,7 +69,7 @@ fn child_process(cmd: String, options: Vec<String>, sender: mpsc::Sender<i32>) {
     }
 }
 
-fn make_jail() -> i32 {
+fn jailset_syscall() -> i32 {
     let keys_and_values = vec![
         (
             CString::new("path").unwrap(),
@@ -104,6 +115,6 @@ fn make_jail() -> i32 {
     result
 }
 
-fn kill_jail(jid: i32) {
+fn jailremove_syscall(jid: i32) {
     let _result = unsafe { libc::jail_remove(jid) };
 }
