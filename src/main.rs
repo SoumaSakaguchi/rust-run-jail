@@ -74,11 +74,10 @@ fn make_jail() -> i32 {
         ),
         (
             CString::new("persist").unwrap(),
-            Vec::new(), // 値なし
+            Vec::new(),
         ),
     ];
 
-    // iovec配列を作成
     let mut iov = Vec::new();
     for (key, value) in &keys_and_values {
         iov.push(iovec {
@@ -87,7 +86,7 @@ fn make_jail() -> i32 {
         });
         iov.push(iovec {
             iov_base: if value.is_empty() {
-                std::ptr::null_mut() // 値がない場合
+                std::ptr::null_mut()
             } else {
                 value.as_ptr() as *mut libc::c_void
             },
@@ -95,11 +94,9 @@ fn make_jail() -> i32 {
         });
     }
 
-    // `jail_set`呼び出し
-    let flags = libc::JAIL_CREATE; // フラグを指定
+    let flags = libc::JAIL_CREATE;
     let result = unsafe { libc::jail_set(iov.as_ptr() as *mut iovec, iov.len() as u32, flags) };
 
-    // 結果の確認
     if result < 0 {
         eprintln!("jail_set failed: {}", std::io::Error::last_os_error());
         std::process::exit(1);
