@@ -7,25 +7,51 @@ use std::thread;
 
 #[derive(Parser)]
 #[clap(
-    name    = "rust-run-jail",
-    author  = "SoumaSakaguchi",
+    name = "rust-run-jail",
+    author = "SoumaSakaguchi",
     version = "v0.1.0",
-    about   = "Rust製FreeBSD Jailランタイム"
+    about = "Rust製FreeBSD Jailランタイム"
 )]
 struct AppArg {
-    #[clap(short, long, help = "configのパス", required = true)]
-    path: String,
+    #[clap(subcommand)]
+    subcmd: SubCmd,
+}
 
-    #[clap(value_parser, required = true)]
-    command: Vec<String>,
+#[derive(Subcommand)]
+enum SubCmd {
+    /// Jail内でコマンドを実行
+    Run {
+        #[clap(short, long, help = "configのパス", required = true)]
+        path: String,
 
-    #[clap(short, long, help = "実行後にJailを破棄する")]
-    destroy: bool,
+        #[clap(value_parser, required = true)]
+        command: Vec<String>,
+
+        #[clap(short, long, help = "実行後にJailを破棄する")]
+        destroy: bool,
+    },
+    /// 他のサブコマンドをここに追加可能
+    Template {
+    },
 }
 
 fn main() {
-    let arg: AppArg = AppArg::parse();
-    let (cmd, cmd_args) = parse_cmd_and_args(arg.command);
+    let args: AppArg = AppArg::parse();
+
+    match args.subcmd {
+        SubCmd::Run { path, command, destroy } => {
+            run_jail(path, command, destroy);
+        }
+        SubCmd::Example {} => {
+            println!("Exampleサブコマンドが選択されました");
+        }
+    }
+}
+
+fn run_jail(path: String, command: Vec<String>, destroy: bool) {
+    println!("Config Path: {}", path);
+
+    let (cmd, cmd_args) = parse_cmd_and_args(command);
 
     let (sender, receiver) = mpsc::channel();
     let handle = thread::spawn({
@@ -40,12 +66,12 @@ fn main() {
     println!("jid: {}", jid);
 
     handle.join().expect("スレッドの実行に失敗");
-    
-    if arg.destroy {
+
+    if destroy {
         jailremove_syscall(jid);
     }
 
-    println!("Succsess!")
+    println!("Success!");
 }
 
 fn parse_cmd_and_args(command: Vec<String>) -> (String, Vec<String>) {
@@ -126,3 +152,4 @@ fn jailset_syscall() -> i32 {
 fn jailremove_syscall(jid: i32) {
     let _result = unsafe { libc::jail_remove(jid) };
 }
+
