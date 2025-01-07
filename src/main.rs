@@ -1,8 +1,6 @@
-use clap::Parser;
-use libc::{self, iovec};
+use clap::{Parser, Subcommand};
+use libc::iovec;
 use std::ffi::CString;
-use std::fs::File;
-use std::io::{self, BufRead};
 use std::process::Command;
 use std::sync::mpsc;
 use std::thread;
@@ -14,24 +12,15 @@ use std::thread;
     version = "v0.1.0",
     about   = "Rust製FreeBSD Jailランタイム"
 )]
-
 struct AppArg {
-    #[clap(short, long, required = true)]
+    #[clap(short, long, help = "configのパス", required = true)]
     path: String,
 
     #[clap(value_parser, required = true)]
     command: Vec<String>,
-}
 
-enum JailValue {
-    Int(i32),
-    String(String),
-    Empty(Vec<String>),
-}
-
-struct JailConfig {
-    key: String,
-    value: JailValue,
+    #[clap(short, long, help = "実行後にJailを破棄する")]
+    destroy: bool,
 }
 
 fn main() {
@@ -51,7 +40,10 @@ fn main() {
     println!("jid: {}", jid);
 
     handle.join().expect("スレッドの実行に失敗");
-    jailremove_syscall(jid);
+    
+    if arg.destroy {
+        jailremove_syscall(jid);
+    }
 
     println!("Succsess!")
 }
@@ -133,66 +125,4 @@ fn jailset_syscall() -> i32 {
 
 fn jailremove_syscall(jid: i32) {
     let _result = unsafe { libc::jail_remove(jid) };
-}
-
-fn parse_value(value: &str) -> JailValue {
-    let value = value.trim_end_matches(';');
-
-    if value.is_empty() {
-        JailValue::Empty(Vec::new())
-    } else if let Ok(int_value) = value.trim().parse::<i32>() {
-        JailValue::Int(int_value)
-    } else {
-        JailValue::String(value.trim().to_string())
-    }
-}
-
-fn get_jail_param(path: String) -> Result<Vec<JailConfig>, std::io::Error> {
-    let file = File::open(path)?;
-    let reader = io::BufReader::new(file);
-
-    let mut configs = Vec::new();
-    let mut first_line = true;
-
-    // 各行を処理
-    for line in reader.lines() {
-        let line = line?;
-
-        // 空行やコメント行をスキップ
-        if line.trim().is_empty() || line.trim_start().starts_with('#') {
-            continue;
-        }
-
-        // 最初の行を処理
-        if first_line {
-            // "name" "jailname" のように処理
-            if let Some((value, _a)) = line.split_once(' ') {
-                let config = JailConfig {
-                    key: "name".trim().to_string(),
-                    value: JailValue::String(value.trim().to_string()),
-                };
-                configs.push(config);
-                first_line = false;
-            }
-        } else {
-            // `=` で分割して key-value ペアを抽出
-            if let Some((key, value)) = line.split_once('=') {
-                let config = JailConfig {
-                    key: key.trim().to_string(),
-                    value: parse_value(value),
-                };
-                configs.push(config);
-            } else {
-                // `=` がない行をキーとして空の値を設定
-                let config = JailConfig {
-                    key: line.trim().to_string(),
-                    value: JailValue::Empty(Vec::new()),
-                };
-                configs.push(config);
-            }
-        }
-    }
-    configs.pop();
-
-    Ok(configs)
 }
