@@ -17,6 +17,7 @@ sudo ./target/debug/rust-run-jail --help
 sudo rust-run-jail run -p <config-path> -- <command>
 ```
 config-path: config.jsonへのパス
+
 command: jail内で実行するコマンド
 
 ## テンプレートjail作成
@@ -25,7 +26,9 @@ command: jail内で実行するコマンド
 sudo rust-run-jail template <netns or freebsd or linux>
 ```
 netns: ネットワークネームスペース互換
+
 freebsd: freebsd jail
+
 linux: linux jail
 
 ## jail削除
